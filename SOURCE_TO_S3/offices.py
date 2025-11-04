@@ -8,12 +8,10 @@ from dotenv import load_dotenv
 def export_table_to_s3():
     load_dotenv()
 
-    # LOCAL DB (where code running)
     username = os.getenv("ORACLE_USER")
     password = os.getenv("ORACLE_PASSWORD")
     dsn = os.getenv("ORACLE_DSN")
 
-    # REMOTE DB LINK CREDS
     dblink_user = os.getenv("DBLINK_USER")
     dblink_pass = os.getenv("DBLINK_PASSWORD")
     dblink_name = os.getenv("DBLINK_NAME")
@@ -25,32 +23,33 @@ def export_table_to_s3():
     bucket_name = os.getenv("S3_BUCKET_NAME")
     etl_batch_date = os.getenv("ETL_BATCH_DATE")
 
-    table_name = "OFFICES"
-    columns = "OFFICECODE,CITY,PHONE,ADDRESSLINE1,ADDRESSLINE2,STATE,COUNTRY,POSTALCODE,TERRITORY"
+    table_name = "EMPLOYEES"
+    columns = "EMPLOYEENUMBER,LASTNAME,FIRSTNAME,EXTENSION,EMAIL,OFFICECODE,REPORTSTO,JOBTITLE"
 
     try:
         connection = oracledb.connect(user=username, password=password, dsn=dsn)
         cursor = connection.cursor()
 
-        # DROP if exists
-        try:
-            cursor.execute(f"DROP PUBLIC DATABASE LINK {dblink_name}")
-        except:
-            pass
+        cursor.execute(f"""
+            BEGIN
+                BEGIN EXECUTE IMMEDIATE 'DROP PUBLIC DATABASE LINK {dblink_name}';
+                EXCEPTION WHEN OTHERS THEN NULL;
+                END;
 
-        # CREATE
-        create_sql = f"""
-        CREATE PUBLIC DATABASE LINK {dblink_name}
-        CONNECT TO {dblink_user} IDENTIFIED BY "{dblink_pass}"
-        USING '(DESCRIPTION=
-            (ADDRESS=(PROTOCOL=TCP)(HOST={dblink_host})(PORT={dblink_port}))
-            (CONNECT_DATA=(SERVICE_NAME={dblink_service}))
-        )'
-        """
-        cursor.execute(create_sql)
+                EXECUTE IMMEDIATE '
+                    CREATE PUBLIC DATABASE LINK {dblink_name}
+                    CONNECT TO {dblink_user} IDENTIFIED BY "{dblink_pass}"
+                    USING ''(DESCRIPTION=
+                                (ADDRESS=(PROTOCOL=TCP)(HOST={dblink_host})(PORT={dblink_port}))
+                                (CONNECT_DATA=(SERVICE_NAME={dblink_service}))
+                             )''
+                ';
+            END;
+        """)
         connection.commit()
+        print(f"DBLINK {dblink_name} created successfully")
 
-        # QUERY through dblink
+        # QUERY USING SCHEMA.TABLE@DBLINK
         query = f"""
             SELECT {columns}
             FROM {schema}.{table_name}@{dblink_name}
@@ -59,16 +58,14 @@ def export_table_to_s3():
 
         df = pd.read_sql(query, connection)
 
-        # Convert to csv
         csv_buffer = StringIO()
         df.to_csv(csv_buffer, index=False, encoding="utf-8")
 
-        # Upload to S3
         s3 = boto3.client("s3")
-        s3_key = f"{table_name}/{etl_batch_date}/office.csv"
+        s3_key = f"{table_name}/{etl_batch_date}/employee.csv"
         s3.put_object(Bucket=bucket_name, Key=s3_key, Body=csv_buffer.getvalue())
 
-        print(f"office.csv uploaded successfully to s3://{bucket_name}/{s3_key}")
+        print(f"employee.csv uploaded successfully to s3://{bucket_name}/{s3_key}")
 
     except Exception as e:
         print(f"Error exporting {table_name}:", e)

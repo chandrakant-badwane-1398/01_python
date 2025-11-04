@@ -32,29 +32,29 @@ def export_table_to_s3():
     try:
         connection = oracledb.connect(user=username, password=password, dsn=dsn)
         cursor = connection.cursor()
+        
+        cursor.execute(f"""
+            BEGIN
+                BEGIN EXECUTE IMMEDIATE 'DROP PUBLIC DATABASE LINK {dblink_name}';
+                EXCEPTION WHEN OTHERS THEN NULL;
+                END;
 
-        # DROP DB LINK IF EXISTS
-        try:
-            cursor.execute(f"DROP PUBLIC DATABASE LINK {dblink_name}")
-        except:
-            pass
-
-        # CREATE DB LINK
-        create_link_sql = f"""
-        CREATE PUBLIC DATABASE LINK {dblink_name}
-        CONNECT TO {dblink_user} IDENTIFIED BY "{dblink_pass}"
-        USING '(DESCRIPTION=
-            (ADDRESS=(PROTOCOL=TCP)(HOST={dblink_host})(PORT={dblink_port}))
-            (CONNECT_DATA=(SERVICE_NAME={dblink_service}))
-        )'
-        """
-        cursor.execute(create_link_sql)
+                EXECUTE IMMEDIATE '
+                    CREATE PUBLIC DATABASE LINK {dblink_name}
+                    CONNECT TO {dblink_user} IDENTIFIED BY "{dblink_pass}"
+                    USING ''(DESCRIPTION=
+                                (ADDRESS=(PROTOCOL=TCP)(HOST={dblink_host})(PORT={dblink_port}))
+                                (CONNECT_DATA=(SERVICE_NAME={dblink_service}))
+                             )''
+                ';
+            END;
+        """)
         connection.commit()
+        print(f"DBLINK {dblink_name} created successfully")
 
-        # QUERY USING DBLINK
         query = f"""
             SELECT {columns}
-            FROM {schema}.{table_name}@{dblink_name}
+            FROM {table_name}@{dblink_name}
             WHERE TO_CHAR(UPDATE_TIMESTAMP,'YYYY-MM-DD') >= '{etl_batch_date}'
         """
 

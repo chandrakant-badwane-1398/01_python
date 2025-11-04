@@ -32,29 +32,28 @@ def export_table_to_s3():
         conn = oracledb.connect(user=username, password=password, dsn=dsn)
         cur = conn.cursor()
 
-        # DROP dblnk if exists
-        try:
-            cur.execute(f"DROP PUBLIC DATABASE LINK {dblink_name}")
-        except:
-            pass   # ignore if not existing
+        cur.execute(f"""
+            BEGIN
+                BEGIN EXECUTE IMMEDIATE 'DROP PUBLIC DATABASE LINK {dblink_name}';
+                EXCEPTION WHEN OTHERS THEN NULL;
+                END;
 
-        # CREATE dblnk
-        create_sql = f"""
-            CREATE PUBLIC DATABASE LINK {dblink_name}
-            CONNECT TO {dblink_user} IDENTIFIED BY "{dblink_pass}"
-            USING '(DESCRIPTION=
-                      (ADDRESS=(PROTOCOL=TCP)(HOST={dblink_host})(PORT={dblink_port}))
-                      (CONNECT_DATA=(SERVICE_NAME={dblink_service}))
-                   )'
-        """
-        cur.execute(create_sql)
+                EXECUTE IMMEDIATE '
+                    CREATE PUBLIC DATABASE LINK {dblink_name}
+                    CONNECT TO {dblink_user} IDENTIFIED BY "{dblink_pass}"
+                    USING ''(DESCRIPTION=
+                                (ADDRESS=(PROTOCOL=TCP)(HOST={dblink_host})(PORT={dblink_port}))
+                                (CONNECT_DATA=(SERVICE_NAME={dblink_service}))
+                             )''
+                ';
+            END;
+        """)
         conn.commit()
         print(f"DBLINK {dblink_name} created successfully")
 
-        # query remote
         query = f"""
             SELECT {columns}
-            FROM {schema}.{table}@{dblink_name}
+            FROM {table}@{dblink_name}
             WHERE TO_CHAR(UPDATE_TIMESTAMP,'YYYY-MM-DD') >= '{etl_batch_date}'
         """
         print("Running:", query.strip())
@@ -62,11 +61,9 @@ def export_table_to_s3():
         df = pd.read_sql(query, conn)
         df.drop_duplicates(inplace=True)
 
-        # to csv in memory
         csv_buf = StringIO()
         df.to_csv(csv_buf, index=False, encoding="utf-8")
 
-        # upload
         s3 = boto3.client("s3")
         s3_key = f"{table}/{etl_batch_date}/customer.csv"
         s3.put_object(Bucket=bucket, Key=s3_key, Body=csv_buf.getvalue())
