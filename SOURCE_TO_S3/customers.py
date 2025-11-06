@@ -19,11 +19,11 @@ def export_customers_to_s3():
     rs_db   = os.getenv("REDSHIFT_DB")
     rs_user = os.getenv("REDSHIFT_USER")
     rs_pass = os.getenv("REDSHIFT_PASSWORD")
-    rs_schema = os.getenv("REDSHIFT_SCHEMA")
+    rs_schema = os.getenv("REDSHIFT_METADATA_SCHEMA")
 
     bucket = os.getenv("S3_BUCKET_NAME")
 
-    dblink_name    = os.getenv("DBLINK_NAME")
+    dblink_name    = os.getenv("DB_LINK")
     dblink_user    = os.getenv("DBLINK_USER")
     dblink_pass    = os.getenv("DBLINK_PASSWORD")
     dblink_host    = os.getenv("DBLINK_HOST")
@@ -32,7 +32,7 @@ def export_customers_to_s3():
 
     table_name = "CUSTOMERS"
     columns = ("CUSTOMERNUMBER,CUSTOMERNAME,CONTACTLASTNAME,CONTACTFIRSTNAME,PHONE,"
-               "ADDRESSLINE1,ADDRESSLINE2,CITY,STATE,POSTALCODE,COUNTRY,SALESREPEMPLOYEENUMBER,CREDITLIMIT")
+               "ADDRESSLINE1,ADDRESSLINE2,CITY,STATE,POSTALCODE,COUNTRY,SALESREPEMPLOYEENUMBER,CREDITLIMIT,CREATE_TIMESTAMP,UPDATE_TIMESTAMP")
     csv_file = "customers.csv"
 
     try:
@@ -72,7 +72,7 @@ def export_customers_to_s3():
         FROM {table_name}@{dblink_name}
         WHERE TO_CHAR(UPDATE_TIMESTAMP,'YYYY-MM-DD') >= '{etl_batch_date}'
     """
-    df = pd.read_sql(query, con)
+    df = pd.read_sql(query, con, dtype_backend = "pyarrow")
 
     csv_buf = StringIO()
     df.to_csv(csv_buf, index=False)

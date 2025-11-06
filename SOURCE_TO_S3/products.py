@@ -21,13 +21,13 @@ def export_products_to_s3():
     rs_db   = os.getenv("REDSHIFT_DB")
     rs_user = os.getenv("REDSHIFT_USER")
     rs_pass = os.getenv("REDSHIFT_PASSWORD")
-    rs_schema = os.getenv("REDSHIFT_SCHEMA")
+    rs_schema = os.getenv("REDSHIFT_METADATA_SCHEMA")
 
     # S3
     bucket = os.getenv("S3_BUCKET_NAME")
 
     # dblink (remote)
-    dblink_name    = os.getenv("DBLINK_NAME")
+    dblink_name    = os.getenv("DB_LINK")
     dblink_user    = os.getenv("DBLINK_USER")
     dblink_pass    = os.getenv("DBLINK_PASSWORD")
     dblink_host    = os.getenv("DBLINK_HOST")
@@ -36,8 +36,8 @@ def export_products_to_s3():
 
     table_name = "PRODUCTS"
     columns = ("PRODUCTCODE,PRODUCTNAME,PRODUCTLINE,PRODUCTSCALE,PRODUCTVENDOR,"
-               "PRODUCTDESCRIPTION,QUANTITYINSTOCK,BUYPRICE,MSRP")
-    csv_file = "product.csv"
+               "PRODUCTDESCRIPTION,QUANTITYINSTOCK,BUYPRICE,MSRP,CREATE_TIMESTAMP,UPDATE_TIMESTAMP")
+    csv_file = "products.csv"
 
     # 1. get etl_batch_date from redshift
     etl_batch_date = None
