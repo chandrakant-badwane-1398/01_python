@@ -6,13 +6,15 @@ import boto3
 from io import StringIO
 from dotenv import load_dotenv
 
+import warnings
+warnings.filterwarnings("ignore", message="pandas only supports SQLAlchemy")
+
 def export_employees_to_s3():
     load_dotenv()
 
     ora_user = os.getenv("ORACLE_USER")
     ora_pass = os.getenv("ORACLE_PASSWORD")
     ora_dsn  = os.getenv("ORACLE_DSN")
-    schema   = os.getenv("ORACLE_SCHEMA")
 
     rs_host = os.getenv("REDSHIFT_HOST")
     rs_port = os.getenv("REDSHIFT_PORT")
@@ -22,14 +24,9 @@ def export_employees_to_s3():
     rs_schema = os.getenv("REDSHIFT_METADATA_SCHEMA")
 
     bucket = os.getenv("S3_BUCKET_NAME")
+    dblink_name = os.getenv("DB_LINK")
 
-    dblink_name    = os.getenv("DB_LINK")
-    dblink_user    = os.getenv("DBLINK_USER")
-    dblink_pass    = os.getenv("DBLINK_PASSWORD")
-    dblink_host    = os.getenv("DBLINK_HOST")
-    dblink_port    = os.getenv("DBLINK_PORT")
-    dblink_service = os.getenv("DBLINK_SERVICE")
-
+   
     table_name = "EMPLOYEES"
     columns = "EMPLOYEENUMBER,LASTNAME,FIRSTNAME,EXTENSION,EMAIL,OFFICECODE,REPORTSTO,JOBTITLE,CREATE_TIMESTAMP,UPDATE_TIMESTAMP"
     csv_file = "employees.csv"
@@ -48,24 +45,7 @@ def export_employees_to_s3():
 
     con = oracledb.connect(user=ora_user, password=ora_pass, dsn=ora_dsn)
     cur = con.cursor()
-    cur.execute(f"ALTER SESSION SET CURRENT_SCHEMA={schema}")
-
-    cur.execute(f"""
-    BEGIN
-      BEGIN EXECUTE IMMEDIATE 'DROP PUBLIC DATABASE LINK {dblink_name}';
-      EXCEPTION WHEN OTHERS THEN NULL;
-      END;
-
-      EXECUTE IMMEDIATE '
-        CREATE PUBLIC DATABASE LINK {dblink_name}
-        CONNECT TO {dblink_user} IDENTIFIED BY "{dblink_pass}"
-        USING ''(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST={dblink_host})(PORT={dblink_port}))
-        (CONNECT_DATA=(SERVICE_NAME={dblink_service})))''
-      ';
-    END;
-    """)
-    con.commit()
-
+    
     query = f"""
         SELECT {columns}
         FROM {table_name}@{dblink_name}

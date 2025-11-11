@@ -13,6 +13,7 @@ def load_productlines_to_redshift():
 
     stage_schema     = os.getenv("REDSHIFT_SCHEMA")
     metadata_schema  = os.getenv("REDSHIFT_METADATA_SCHEMA")
+    table_name = "productlines"
 
     role     = os.getenv("REDSHIFT_IAM_ROLE")
     bucket   = os.getenv("S3_BUCKET_NAME")
@@ -23,21 +24,21 @@ def load_productlines_to_redshift():
             cur.execute(f"select etl_batch_date from {metadata_schema}.batch_control limit 1")
             etl_batch_date = str(cur.fetchone()[0])
 
-    s3_key = f"PRODUCTLINES/{etl_batch_date}/productlines.csv"
+    s3_key = f"{table_name.upper()}/{etl_batch_date}/{table_name}.csv"
     s3_path = f"s3://{bucket}/{s3_key}"
 
     print("Loading from:", s3_path)
 
     copy_sql = f"""
-        COPY {stage_schema}.productlines
+        TRUNCATE TABLE {stage_schema}.{table_name};
+
+        COPY {stage_schema}.{table_name}
         FROM '{s3_path}'
         IAM_ROLE '{role}'
         IGNOREHEADER 1
         BLANKSASNULL
         EMPTYASNULL
-        FORMAT AS CSV
-        DELIMITER ','
-        QUOTE '"';
+        FORMAT AS CSV;
     """
 
     with psycopg2.connect(host=host, port=port, dbname=database, user=user, password=password) as conn:
@@ -48,6 +49,8 @@ def load_productlines_to_redshift():
                 print("PRODUCTLINES LOAD DONE")
             except Exception as e:
                 print("COPY ERROR:", e)
-
+    cur.close()
+    conn.close() 
+    
 if __name__ == "__main__":
     load_productlines_to_redshift()
